@@ -38,6 +38,7 @@ class TicTacToe(QtGui.QMainWindow):
         self.setGeometry(parent.geometry())
         self.setWindowTitle('Match')
         self.setFixedSize(270, 270)
+        
         self.buttons = [MyButton('', self) for i in xrange(9)]
         self.actual_player = 0
         self.parent = parent
