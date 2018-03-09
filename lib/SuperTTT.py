@@ -14,6 +14,8 @@ __DEADPATH__ = os.path.join(os.path.abspath('.'), 'resources/dead.png')
 class MyButton(QtGui.QPushButton):
 
     marked = False
+    dead = False
+    winner = None
 
     def __init__(self, *args, **kwargs):
         super(MyButton, self).__init__(*args, **kwargs)
@@ -24,6 +26,22 @@ class MyButton(QtGui.QPushButton):
     def get_marked(self):
         mark = self.marked
         return mark
+
+    def set_dead(self):
+        self.dead = True
+
+    def get_dead(self):
+        dead = self.dead
+        return dead
+
+    def set_winner(self, win):
+        self.winner = win
+        if win == 0:
+            self.set_dead()
+
+    def get_winner(self):
+        win = self.winner
+        return win
 
 
 class TicTacToe(QtGui.QMainWindow):
@@ -38,7 +56,7 @@ class TicTacToe(QtGui.QMainWindow):
         self.setGeometry(parent.geometry())
         self.setWindowTitle('Match')
         self.setFixedSize(270, 270)
-        
+
         self.buttons = [MyButton('', self) for i in xrange(9)]
         self.actual_player = 0
         self.parent = parent
@@ -72,7 +90,7 @@ class TicTacToe(QtGui.QMainWindow):
             self.button_icon = __CIRCLEPATH__
 
     def win(self):
-        self.parent.winner_sign.emit(str(randint(1, 2)))
+        self.parent.inwinner_sign.emit(randint(0, 2))
         self.close_round()
 
     def end_time(self):
@@ -84,6 +102,7 @@ class TicTacToe(QtGui.QMainWindow):
     def close_round(self):
         self.parent.activateWindow()
         self.close()
+        self.parent.check_sign.emit()
 
     def closeEvent(self, event):
         self.close_round()
@@ -100,8 +119,10 @@ class SuperTicTacToe(QtGui.QMainWindow):
     buttons = None
     tictactoe = None
     round_winner = None
-    winner_sign = QtCore.pyqtSignal(str)
-    bubu = QtCore.pyqtSignal(int)
+    last_marked = None
+    inwinner_sign = QtCore.pyqtSignal(int)
+    winner_sign = QtCore.pyqtSignal(list)
+    check_sign = QtCore.pyqtSignal()
 
     def __init__(self):
         super(SuperTicTacToe, self).__init__()
@@ -122,28 +143,66 @@ class SuperTicTacToe(QtGui.QMainWindow):
                 btn.setIconSize(QtCore.QSize(90, 90))
         for i, btn in enumerate(self.buttons):
             btn.clicked.connect(self.play_house)
-        self.winner_sign[str].connect(self.winner_round)
+        self.inwinner_sign[int].connect(self.winner_round)
+        self.winner_sign[list].connect(self.winner_game)
+        self.check_sign.connect(self.verify_winner)
 
     def play_house(self):
         # PLAYS THE INSIDER TICTACTOE IF BUTTON NOT CHECKED
         btn = self.sender()
         if isinstance(btn, MyButton):
-            if not self.verify_active_round(btn) and not btn.get_marked():
+            if not self.verify_active_round() and not btn.get_marked():
+                self.last_marked = btn
                 btn.set_marked(True)
                 self.tictactoe = TicTacToe(self)
                 self.tictactoe.create_ui()
 
-    def verify_active_round(self, button):
-        round = [r for r in self.children() if isinstance(r,TicTacToe)]
-        if len(round) == 0:
+    def verify_active_round(self):
+        round = [r for r in self.children() if isinstance(r, TicTacToe)]
+        marks = [b for b in self.buttons if b.get_marked()]
+        if len(round) == len(marks):
             return False
         else:
             return True
 
     def winner_round(self, value):
-        for btn in self.buttons:
-            if btn.icon().name() == '' and btn.get_marked():
-                if int(value) == 1:
-                    btn.setIcon(QtGui.QIcon(__CROSSPATH__))
-                else:
-                    btn.setIcon(QtGui.QIcon(__CIRCLEPATH__))
+        btn = self.last_marked
+        btn.set_winner(value)
+        if value == 1:
+            btn.setIcon(QtGui.QIcon(__CROSSPATH__))
+        elif value == 2:
+            btn.setIcon(QtGui.QIcon(__CIRCLEPATH__))
+        else:
+            btn.setIcon(QtGui.QIcon(__DEADPATH__))
+
+    def winner_game(self, buttons):
+        for i in xrange(10):
+            for btn in buttons:
+                self.buttons[btn].setStyleSheet(
+                    "background-color: rgb(214,183,255)")
+            for btn in buttons:
+                self.buttons[btn].setStyleSheet(
+                    "background-color: rgb(183,255,225)")
+
+    def verify_winner(self):
+        rows = [[j + i * 3 for j in xrange(3)] for i in xrange(3)]
+        cols = [[i + j * 3 for j in xrange(3)] for i in xrange(3)]
+        diags = [[0, 4, 8], [2, 4, 6]]
+        all_wins = [rows, cols, diags]
+
+        def winner(win):
+            for i in xrange(2):
+                if win[i] != win[i + 1]:
+                    return False
+            return True
+
+        for aw in all_wins:
+            for w in aw:
+                win = [self.buttons[btn].get_winner() for btn in w]
+                dead = [btn for btn in w if
+                        self.buttons[btn].get_dead() or not self.buttons[btn].get_winner()]
+                if len(dead) != 0:
+                    pass
+                elif winner(win):
+                    print win
+                    self.winner_sign.emit(win)
